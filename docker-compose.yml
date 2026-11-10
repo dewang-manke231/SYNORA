@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  synora-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: synora-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=sqlite:///./synora.db
+      - LLM_PROVIDER=gemini
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=gemini-flash-lite-latest
+      - EMBEDDING_PROVIDER=gemini
+      - EMBEDDING_MODEL=gemini-embedding-001
+    volumes:
+      - ./backend/uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  synora-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: synora-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      synora-backend:
+        condition: service_healthy
+    restart: unless-stopped
+

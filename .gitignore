@@ -1,0 +1,68 @@
+# Secrets and machine-local configuration.
+# Keep the checked-in templates available for onboarding.
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# Dependencies and Python environments.
+node_modules/
+**/.venv/
+**/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test, type-checker, coverage, and tool caches.
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.tox/
+**/.tox/
+.cache/
+**/.cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage/
+
+# Build outputs and frontend bundler caches.
+dist/
+build/
+**/.vite/
+*.tsbuildinfo
+
+# Local databases, dumps, logs, and runtime project uploads.
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.dump
+*.bak
+*.log
+/backend/uploads/
+uploads/
+
+# Private keys and local certificates.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Operating system and editor files.
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
