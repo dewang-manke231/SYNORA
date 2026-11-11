@@ -35,10 +35,145 @@ from app.models import (
     AuditLog,
 )
 
+PUBLIC_DEMO_ORGANIZATION_ID = "org-synora-public-demo"
+PUBLIC_DEMO_MANAGER_ID = "usr-synora-demo-manager"
+PUBLIC_DEMO_EMPLOYEE_ID = "usr-synora-demo-employee"
+PUBLIC_DEMO_PROJECT_ID = "prj-synora-public-demo"
+PUBLIC_DEMO_ROLE_USER_IDS = {
+    "manager": PUBLIC_DEMO_MANAGER_ID,
+    "employee": PUBLIC_DEMO_EMPLOYEE_ID,
+}
+
+
+def _seed_public_demo_workspace(db: Session) -> None:
+    """Create a clearly labeled sample workspace isolated from customer organizations."""
+    organization = db.query(Organization).filter(Organization.id == PUBLIC_DEMO_ORGANIZATION_ID).first()
+    if organization and organization.slug != "synora-public-demo":
+        raise RuntimeError("The reserved public demo organization ID is already in use.")
+    if not organization:
+        slug_owner = db.query(Organization).filter(Organization.slug == "synora-public-demo").first()
+        if slug_owner:
+            raise RuntimeError("The reserved public demo organization slug is already in use.")
+        organization = Organization(
+            id=PUBLIC_DEMO_ORGANIZATION_ID,
+            name="Synora Public Demo Workspace",
+            slug="synora-public-demo",
+            description="Isolated sample workspace. All content is fictional and for demonstration only.",
+        )
+        db.add(organization)
+        db.flush()
+
+    demo_users = {
+        "manager": (PUBLIC_DEMO_MANAGER_ID, "manager@synora-demo.invalid", "Demo Manager"),
+        "employee": (PUBLIC_DEMO_EMPLOYEE_ID, "employee@synora-demo.invalid", "Demo Employee"),
+    }
+    users = {}
+    for role, (user_id, email, full_name) in demo_users.items():
+        user = db.query(User).filter(User.id == user_id).first()
+        email_owner = db.query(User).filter(User.email == email).first()
+        if email_owner and email_owner.id != user_id:
+            raise RuntimeError("A reserved public demo email is already in use.")
+        if user and (user.email != email or user.role != role):
+            raise RuntimeError("A reserved public demo user ID is already in use.")
+        if not user:
+            user = User(
+                id=user_id,
+                email=email,
+                full_name=full_name,
+                role=role,
+                hashed_password=None,
+                is_active=True,
+            )
+            db.add(user)
+            db.flush()
+
+        memberships = db.query(OrganizationMembership).filter(
+            OrganizationMembership.user_id == user_id
+        ).all()
+        if any(membership.organization_id != PUBLIC_DEMO_ORGANIZATION_ID for membership in memberships):
+            raise RuntimeError("A public demo user is attached to a non-demo organization.")
+        if not any(m.organization_id == PUBLIC_DEMO_ORGANIZATION_ID for m in memberships):
+            db.add(OrganizationMembership(
+                id=f"mem-{user_id}",
+                organization_id=PUBLIC_DEMO_ORGANIZATION_ID,
+                user_id=user_id,
+                role=role,
+            ))
+        users[role] = user
+
+    project = db.query(Project).filter(Project.id == PUBLIC_DEMO_PROJECT_ID).first()
+    if project and project.organization_id != PUBLIC_DEMO_ORGANIZATION_ID:
+        raise RuntimeError("The reserved public demo project ID is already in use.")
+    if not project:
+        project = Project(
+            id=PUBLIC_DEMO_PROJECT_ID,
+            organization_id=PUBLIC_DEMO_ORGANIZATION_ID,
+            name="Continuity Sample Project",
+            slug="continuity-sample-project",
+            description="Fictional project used to demonstrate Synora. Findings and handover below are sample content.",
+            bus_factor=1.0,
+            knowledge_coverage_score=60.0,
+        )
+        db.add(project)
+        db.flush()
+
+    if not db.query(KnowledgeLossIndicator).filter_by(id="rad-synora-demo-gap").first():
+        db.add(KnowledgeLossIndicator(
+            id="rad-synora-demo-gap",
+            project_id=PUBLIC_DEMO_PROJECT_ID,
+            module_name="Sample API Service",
+            gap_type="ADR_MISSING",
+            severity="medium",
+            description="Demo sample: no architecture decision record is linked to the sample API service.",
+            recommended_remediation="Document the service's main design decisions and trade-offs.",
+        ))
+    if not db.query(SentinelEvent).filter_by(id="risk-synora-demo-risk").first():
+        db.add(SentinelEvent(
+            id="risk-synora-demo-risk",
+            project_id=PUBLIC_DEMO_PROJECT_ID,
+            project_name=project.name,
+            risk_level="medium",
+            category="knowledge_continuity",
+            description="Demo sample: the sample service has no recorded secondary maintainer.",
+            recommended_action="Record a backup owner and review the service handover.",
+        ))
+    if not db.query(Handover).filter_by(id="ho-synora-demo-handover").first():
+        db.add(Handover(
+            id="ho-synora-demo-handover",
+            organization_id=PUBLIC_DEMO_ORGANIZATION_ID,
+            project_id=PUBLIC_DEMO_PROJECT_ID,
+            project_name=project.name,
+            project_description="Fictional continuity sample for the public demo workspace.",
+            employee_name="Demo Employee",
+            role="Software Engineer",
+            department="Sample Engineering",
+            transition_type="project_transfer",
+            status="submitted",
+            readiness_score=60.0,
+            key_responsibilities=["Maintain the sample API service"],
+            critical_dependencies=["Sample deployment pipeline"],
+            unresolved_blockers=["Sample: architecture decision record is not documented"],
+            completed_tasks=["Reviewed the sample service"],
+            pending_tasks=["Write the sample architecture decision record"],
+            important_notes="Demo sample only. This handover does not describe a real employee or project.",
+            recommended_next_actions=["Review service ownership", "Document design decisions"],
+            repository_links=[],
+            documentation_links=[],
+            database_references=[],
+            assigned_to=PUBLIC_DEMO_EMPLOYEE_ID,
+        ))
+    db.commit()
+
 
 def seed_database(db: Session) -> None:
-    # The bundled demo organization is a development aid, never production data.
-    if not settings.DEMO_SEED_ENABLED or settings.ENVIRONMENT.strip().lower() not in {"development", "test"}:
+    if not settings.DEMO_SEED_ENABLED:
+        return
+
+    if settings.ENVIRONMENT.strip().lower() == "production":
+        _seed_public_demo_workspace(db)
+        return
+
+    if settings.ENVIRONMENT.strip().lower() not in {"development", "test"}:
         return
 
     # Ensure baseline Acme demo organization and users exist

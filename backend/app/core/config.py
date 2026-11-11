@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     # Explicit values override the environment-based prototype default.
     DEMO_LOGIN_ENABLED: Optional[bool] = None
-    # Demo accounts are seeded only when explicitly enabled in development/test.
+    # Demo accounts are seeded only when explicitly enabled.
     DEMO_SEED_ENABLED: bool = False
 
     # Provider-independent AI configuration
@@ -61,10 +61,8 @@ class Settings(BaseSettings):
         environment = self.ENVIRONMENT.strip().lower()
         if self.DEMO_LOGIN_ENABLED is None:
             self.DEMO_LOGIN_ENABLED = environment in {"development", "test", "prototype"}
-        if environment == "production" and self.DEMO_LOGIN_ENABLED:
-            raise ValueError("DEMO_LOGIN_ENABLED must be false in production.")
-        if self.DEMO_SEED_ENABLED and environment not in {"development", "test"}:
-            raise ValueError("DEMO_SEED_ENABLED is allowed only in development or test environments.")
+        if environment == "production" and self.DEMO_LOGIN_ENABLED and not self.DEMO_SEED_ENABLED:
+            raise ValueError("Production demo login requires DEMO_SEED_ENABLED=true for the isolated sample workspace.")
 
         # A missing or weak secret must never silently fall back to a known key.
         secret = self.JWT_SECRET

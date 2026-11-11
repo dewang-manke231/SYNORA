@@ -22,8 +22,12 @@ services:
         value: gemini
       - key: EMBEDDING_MODEL
         value: gemini-embedding-001
-      - key: JWT_SECRET_KEY
+      - key: JWT_SECRET
         sync: false
+      - key: DEMO_LOGIN_ENABLED
+        value: true
+      - key: DEMO_SEED_ENABLED
+        value: true
       - key: STORAGE_PROVIDER
         value: supabase
       - key: SUPABASE_URL

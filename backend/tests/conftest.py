@@ -1,5 +1,6 @@
 import pytest
 import os
+from contextlib import asynccontextmanager
 
 # Test-only signing key and demo fixture opt-in; never supplied by application code.
 os.environ.setdefault("JWT_SECRET", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
@@ -8,6 +9,7 @@ os.environ.setdefault("DEMO_LOGIN_ENABLED", "true")
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
 import app.core.database
@@ -18,8 +20,12 @@ from app.core.security import create_access_token
 from app.core.seed import seed_database
 import app.models  # Ensure all models are registered with Base.metadata
 
-TEST_DATABASE_URL = "sqlite:///./test_synora.db"
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+TEST_DATABASE_URL = "sqlite://"
+test_engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 # Monkeypatch database engine and sessionmaker so test suite always uses test database
@@ -34,6 +40,14 @@ import app.services.storage
 app.core.config.settings.STORAGE_PROVIDER = "local"
 app.core.config.settings.EMBEDDING_PROVIDER = "mock"
 app.services.storage._storage_instance = app.services.storage.LocalStorageProvider()
+
+# The fixture creates and seeds its isolated database explicitly. Don't run the
+# application's production startup initializer against test connections.
+@asynccontextmanager
+async def _test_lifespan(_app):
+    yield
+
+fastapi_app.router.lifespan_context = _test_lifespan
 
 
 
@@ -57,11 +71,6 @@ def setup_test_db():
     yield
     fastapi_app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=test_engine)
-    if os.path.exists("./test_synora.db"):
-        try:
-            os.remove("./test_synora.db")
-        except Exception:
-            pass
 
 
 

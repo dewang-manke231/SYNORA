@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.seed import PUBLIC_DEMO_ORGANIZATION_ID, PUBLIC_DEMO_ROLE_USER_IDS
 from app.models import User, Organization, OrganizationMembership, generate_uuid, utc_now
 from app.core.security import (
     hash_password,
@@ -226,15 +227,25 @@ def login_user(
 
 @router.post("/demo-login", response_model=TokenResponse)
 def demo_login(payload: DemoLoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    """Issues a normal session for a fixed demo identity when prototype mode is enabled."""
+    """Issues a normal RBAC session for a role-specific demo identity."""
     if not settings.DEMO_LOGIN_ENABLED:
         raise HTTPException(status_code=404, detail="Direct demo sign-in is disabled on this environment.")
 
-    demo_emails = {
-        "manager": "marcus.vance@acme.corp",
-        "employee": "alex.mercer@acme.corp",
-    }
-    user = db.query(User).filter(User.email == demo_emails[payload.role]).first()
+    if settings.ENVIRONMENT.strip().lower() == "production":
+        user = db.query(User).filter(User.id == PUBLIC_DEMO_ROLE_USER_IDS[payload.role]).first()
+        demo_membership = db.query(OrganizationMembership).filter_by(
+            user_id=PUBLIC_DEMO_ROLE_USER_IDS[payload.role],
+            organization_id=PUBLIC_DEMO_ORGANIZATION_ID,
+            role=payload.role,
+        ).first()
+        if not demo_membership:
+            user = None
+    else:
+        demo_emails = {
+            "manager": "marcus.vance@acme.corp",
+            "employee": "alex.mercer@acme.corp",
+        }
+        user = db.query(User).filter(User.email == demo_emails[payload.role]).first()
     if not user or not user.is_active or user.role != payload.role:
         raise HTTPException(status_code=503, detail=f"The {payload.role} demo account is not available.")
     return _issue_session(user, db)
