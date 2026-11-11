@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
 
+    ENVIRONMENT: str = "development"
+
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -41,6 +43,7 @@ class Settings(BaseSettings):
 
     DEMO_LOGIN_ENABLED: Optional[bool] = None
     DEMO_SEED_ENABLED: bool = False
+
     DEMO_MANAGER_EMAIL: Optional[str] = None
     DEMO_MANAGER_PASSWORD: Optional[str] = None
     DEMO_EMPLOYEE_EMAIL: Optional[str] = None
@@ -77,12 +80,11 @@ class Settings(BaseSettings):
             and not self.DEMO_SEED_ENABLED
         ):
             raise ValueError(
-                "Production demo login requires DEMO_SEED_ENABLED=true "
-                "for the isolated sample workspace."
+                "Production demo login requires DEMO_SEED_ENABLED=true."
             )
 
         if self.DEMO_SEED_ENABLED:
-            required_demo_credentials = (
+            required_credentials = (
                 self.DEMO_MANAGER_EMAIL,
                 self.DEMO_MANAGER_PASSWORD,
                 self.DEMO_EMPLOYEE_EMAIL,
@@ -91,7 +93,7 @@ class Settings(BaseSettings):
 
             if any(
                 not value or not value.strip()
-                for value in required_demo_credentials
+                for value in required_credentials
             ):
                 raise ValueError(
                     "DEMO_SEED_ENABLED requires manager and employee "
@@ -127,7 +129,6 @@ class Settings(BaseSettings):
                     "public demo email addresses."
                 )
 
-        # A missing or weak secret must never silently fall back.
         secret = self.JWT_SECRET
 
         insecure = (
