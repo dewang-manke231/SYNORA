@@ -28,6 +28,14 @@ services:
         value: true
       - key: DEMO_SEED_ENABLED
         value: true
+      - key: DEMO_MANAGER_EMAIL
+        sync: false
+      - key: DEMO_MANAGER_PASSWORD
+        sync: false
+      - key: DEMO_EMPLOYEE_EMAIL
+        sync: false
+      - key: DEMO_EMPLOYEE_PASSWORD
+        sync: false
       - key: STORAGE_PROVIDER
         value: supabase
       - key: SUPABASE_URL

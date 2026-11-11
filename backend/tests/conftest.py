@@ -6,6 +6,10 @@ from contextlib import asynccontextmanager
 os.environ.setdefault("JWT_SECRET", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 os.environ.setdefault("DEMO_SEED_ENABLED", "true")
 os.environ.setdefault("DEMO_LOGIN_ENABLED", "true")
+os.environ.setdefault("DEMO_MANAGER_EMAIL", "manager@demo.test")
+os.environ.setdefault("DEMO_MANAGER_PASSWORD", "TestManagerPass!2026")
+os.environ.setdefault("DEMO_EMPLOYEE_EMAIL", "employee@demo.test")
+os.environ.setdefault("DEMO_EMPLOYEE_PASSWORD", "TestEmployeePass!2026")
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

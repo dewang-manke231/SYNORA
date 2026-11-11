@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal, engine, Base
 from app.core.embeddings import get_embedding_provider
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.models import (
     User,
     Organization,
@@ -64,16 +64,16 @@ def _seed_public_demo_workspace(db: Session) -> None:
         db.flush()
 
     demo_users = {
-        "manager": (PUBLIC_DEMO_MANAGER_ID, "manager@synora-demo.invalid", "Demo Manager"),
-        "employee": (PUBLIC_DEMO_EMPLOYEE_ID, "employee@synora-demo.invalid", "Demo Employee"),
+        "manager": (PUBLIC_DEMO_MANAGER_ID, settings.DEMO_MANAGER_EMAIL, settings.DEMO_MANAGER_PASSWORD, "Demo Manager"),
+        "employee": (PUBLIC_DEMO_EMPLOYEE_ID, settings.DEMO_EMPLOYEE_EMAIL, settings.DEMO_EMPLOYEE_PASSWORD, "Demo Employee"),
     }
     users = {}
-    for role, (user_id, email, full_name) in demo_users.items():
+    for role, (user_id, email, password, full_name) in demo_users.items():
         user = db.query(User).filter(User.id == user_id).first()
         email_owner = db.query(User).filter(User.email == email).first()
         if email_owner and email_owner.id != user_id:
             raise RuntimeError("A reserved public demo email is already in use.")
-        if user and (user.email != email or user.role != role):
+        if user and user.role != role:
             raise RuntimeError("A reserved public demo user ID is already in use.")
         if not user:
             user = User(
@@ -81,18 +81,29 @@ def _seed_public_demo_workspace(db: Session) -> None:
                 email=email,
                 full_name=full_name,
                 role=role,
-                hashed_password=None,
+                hashed_password=hash_password(password),
                 is_active=True,
             )
             db.add(user)
             db.flush()
+        else:
+            # These reserved IDs are owned by the demo workspace. Reconcile configured
+            # credentials on restart without resetting an unchanged password hash.
+            user.email = email
+            user.full_name = full_name
+            if not user.hashed_password or not verify_password(password, user.hashed_password):
+                user.hashed_password = hash_password(password)
+            db.add(user)
 
         memberships = db.query(OrganizationMembership).filter(
             OrganizationMembership.user_id == user_id
         ).all()
         if any(membership.organization_id != PUBLIC_DEMO_ORGANIZATION_ID for membership in memberships):
             raise RuntimeError("A public demo user is attached to a non-demo organization.")
-        if not any(m.organization_id == PUBLIC_DEMO_ORGANIZATION_ID for m in memberships):
+        demo_membership = next((m for m in memberships if m.organization_id == PUBLIC_DEMO_ORGANIZATION_ID), None)
+        if demo_membership and demo_membership.role != role:
+            raise RuntimeError("A public demo user has an invalid demo organization role.")
+        if not demo_membership:
             db.add(OrganizationMembership(
                 id=f"mem-{user_id}",
                 organization_id=PUBLIC_DEMO_ORGANIZATION_ID,
@@ -176,7 +187,11 @@ def seed_database(db: Session) -> None:
     if settings.ENVIRONMENT.strip().lower() not in {"development", "test"}:
         return
 
-    # Ensure baseline Acme demo organization and users exist
+    # Provision the same isolated account pair locally; the Acme fixture below remains
+    # a separate development/test dataset and is never used by the public login UI.
+    _seed_public_demo_workspace(db)
+
+    # Ensure baseline Acme demo organization and users exist for legacy tests only.
     acme_org = db.query(Organization).filter(Organization.id == "org-acme-01").first()
     if acme_org:
         return

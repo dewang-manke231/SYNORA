@@ -637,6 +637,16 @@ class DemoLoginRequest(BaseModel):
     role: Literal["manager", "employee"]
 
 
+class PublicDemoCredential(BaseModel):
+    email: str
+    password: str
+
+
+class PublicDemoCredentials(BaseModel):
+    manager: PublicDemoCredential
+    employee: PublicDemoCredential
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

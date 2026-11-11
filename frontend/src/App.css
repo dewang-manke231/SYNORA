@@ -311,6 +311,13 @@
 .login-role-card.employee .login-role-features li svg { color:#B35537; }
 .welcome-login-form { display:grid; gap:.45rem; }
 .welcome-demo-note { margin:.25rem 0 0; color:#A2847B; font-size:.74rem; }
+.welcome-demo-credentials { display:grid; gap:.45rem; margin:.15rem 0 .35rem; }
+.welcome-demo-credentials > div { display:grid; grid-template-columns:1fr auto; gap:.2rem .5rem; padding:.55rem .65rem; border:1px solid rgba(162,132,123,.24); border-radius:9px; background:rgba(7,5,5,.42); }
+.welcome-demo-credentials > div span { grid-column:1 / -1; color:#A2847B; font-size:.68rem; }
+.welcome-demo-credentials code { align-self:center; color:#D0C4C0; font-size:.78rem; overflow-wrap:anywhere; user-select:all; }
+.welcome-demo-credentials button,.welcome-copy-all { display:inline-flex; align-items:center; justify-content:center; gap:.35rem; min-height:30px; padding:.3rem .5rem; border:1px solid rgba(162,132,123,.3); border-radius:7px; color:#D0C4C0; background:rgba(91,85,84,.16); font:inherit; font-size:.68rem; cursor:pointer; }
+.welcome-demo-credentials button:hover,.welcome-copy-all:hover { border-color:#B35537; color:#fff; }
+.welcome-copy-all { justify-self:start; }
 .welcome-login-form label { margin-top:.25rem; color:var(--text-secondary); font-size:.72rem; font-weight:600; }
 .welcome-login-form input { width:100%; min-height:44px; padding:.7rem .8rem; border:1px solid var(--border-light); border-radius:var(--radius-md); outline:none; color:var(--text-primary); background:rgba(10,13,20,.72); font:inherit; font-size:.82rem; }
 .welcome-login-form input:focus { border-color:#B35537; box-shadow:0 0 0 3px rgba(179,85,55,.18); }

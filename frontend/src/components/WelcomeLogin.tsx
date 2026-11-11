@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { ArrowRight, BriefcaseBusiness, Check, CheckCircle2, Cpu, Loader2, Sparkles, UsersRound } from 'lucide-react'
-import { demoLoginUser, loginUser, setAuthToken } from '../services/api'
+import React, { useEffect, useState } from 'react'
+import { ArrowRight, BriefcaseBusiness, Check, CheckCircle2, Copy, Cpu, Loader2, Sparkles, UsersRound } from 'lucide-react'
+import { fetchPublicDemoCredentials, loginUser, setAuthToken } from '../services/api'
 import { TubesBackground } from './TubesBackground'
 import type { UserProfile } from '../types'
 
@@ -9,6 +9,7 @@ interface WelcomeLoginProps {
 }
 
 type LoginRole = 'manager' | 'employee'
+type DemoCredentials = { email: string; password: string }
 
 export const WelcomeLogin: React.FC<WelcomeLoginProps> = ({ onAuthenticated }) => {
   const [loadingRole, setLoadingRole] = useState<LoginRole | null>(null)
@@ -17,14 +18,29 @@ export const WelcomeLogin: React.FC<WelcomeLoginProps> = ({ onAuthenticated }) =
   const [employeeCredentials, setEmployeeCredentials] = useState({ email: '', password: '' })
   const [employeeSignInError, setEmployeeSignInError] = useState('')
   const [employeeSigningIn, setEmployeeSigningIn] = useState(false)
+  const [demoCredentials, setDemoCredentials] = useState<Partial<Record<LoginRole, DemoCredentials>>>({})
+  const [credentialsError, setCredentialsError] = useState('')
+  const [copied, setCopied] = useState('')
+
+  useEffect(() => {
+    let active = true
+    fetchPublicDemoCredentials().then((credentials) => {
+      if (active) setDemoCredentials(credentials)
+    }).catch((error: unknown) => {
+      if (active) setCredentialsError(error instanceof Error ? error.message : 'Demo credentials are unavailable.')
+    })
+    return () => { active = false }
+  }, [])
 
   const signIn = async (requestedRole: LoginRole) => {
     setErrors(previous => ({ ...previous, [requestedRole]: undefined }))
     setLoadingRole(requestedRole)
     try {
-      const session = await demoLoginUser(requestedRole)
+      const credentials = demoCredentials[requestedRole]
+      if (!credentials) throw new Error(credentialsError || 'Demo credentials are not available yet. Please retry shortly.')
+      const session = await loginUser(credentials)
       const roleMatches = requestedRole === 'manager'
-        ? session.user.role === 'manager' || session.user.role === 'admin'
+        ? session.user.role === 'manager'
         : session.user.role === 'employee'
       if (!roleMatches) {
         setAuthToken(null)
@@ -71,7 +87,7 @@ export const WelcomeLogin: React.FC<WelcomeLoginProps> = ({ onAuthenticated }) =
       <section className="login-role-grid" aria-label="Choose your workspace login">
         <LoginCard
           role="manager"
-          title="Manager Login"
+          title="Manager Demo"
           description="Oversee team continuity and project health."
           features={[
             'See organization projects and team progress',
@@ -85,11 +101,15 @@ export const WelcomeLogin: React.FC<WelcomeLoginProps> = ({ onAuthenticated }) =
           loading={loadingRole === 'manager'}
           disabled={loadingRole !== null}
           error={errors.manager}
+          credentials={demoCredentials.manager}
+          credentialsError={credentialsError}
+          copied={copied}
+          onCopy={(kind, value) => void copyCredential('manager', kind, value)}
           onSubmit={() => void signIn('manager')}
         />
         <LoginCard
           role="employee"
-          title="Employee Login"
+          title="Employee Demo"
           description="Upload project work and preserve the details your team needs."
           features={[
             'Upload project ZIPs and supporting documents',
@@ -103,6 +123,10 @@ export const WelcomeLogin: React.FC<WelcomeLoginProps> = ({ onAuthenticated }) =
           loading={loadingRole === 'employee'}
           disabled={loadingRole !== null}
           error={errors.employee}
+          credentials={demoCredentials.employee}
+          credentialsError={credentialsError}
+          copied={copied}
+          onCopy={(kind, value) => void copyCredential('employee', kind, value)}
           onSubmit={() => void signIn('employee')}
         />
       </section>
@@ -121,6 +145,28 @@ export const WelcomeLogin: React.FC<WelcomeLoginProps> = ({ onAuthenticated }) =
       <section className="welcome-employee-signin"><button type="button" onClick={() => setShowEmployeeSignIn((shown) => !shown)}>{showEmployeeSignIn ? 'Hide employee account sign-in' : 'Already added as an employee? Sign in with your account'}</button>{showEmployeeSignIn && <form onSubmit={(event) => void signInExistingEmployee(event)}><input required type="email" autoComplete="username" placeholder="Employee email" value={employeeCredentials.email} onChange={(event) => setEmployeeCredentials({ ...employeeCredentials, email: event.target.value })} /><input required type="password" autoComplete="current-password" placeholder="Password" value={employeeCredentials.password} onChange={(event) => setEmployeeCredentials({ ...employeeCredentials, password: event.target.value })} />{employeeSignInError && <p role="alert">{employeeSignInError}</p>}<button type="submit" disabled={employeeSigningIn}>{employeeSigningIn ? 'Signing in…' : 'Sign in as employee'}</button></form>}</section>
     </div>
   </main>
+
+  async function copyCredential(role: LoginRole, kind: 'Email' | 'Password' | 'All', value: string) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value)
+      } else {
+        const field = document.createElement('textarea')
+        field.value = value
+        field.style.position = 'fixed'
+        field.style.opacity = '0'
+        document.body.appendChild(field)
+        field.select()
+        const copiedToClipboard = document.execCommand('copy')
+        field.remove()
+        if (!copiedToClipboard) throw new Error('Copy unavailable')
+      }
+      setCopied(`${role}-${kind}`)
+      window.setTimeout(() => setCopied(''), 1800)
+    } catch {
+      setErrors(previous => ({ ...previous, [role]: 'Clipboard access is unavailable in this browser.' }))
+    }
+  }
 }
 
 interface LoginCardProps {
@@ -132,10 +178,14 @@ interface LoginCardProps {
   loading: boolean
   disabled: boolean
   error?: string
+  credentials?: DemoCredentials
+  credentialsError: string
+  copied: string
+  onCopy: (kind: 'Email' | 'Password' | 'All', value: string) => void
   onSubmit: () => void
 }
 
-const LoginCard: React.FC<LoginCardProps> = ({ role, title, description, features, icon, loading, disabled, error, onSubmit }) => (
+const LoginCard: React.FC<LoginCardProps> = ({ role, title, description, features, icon, loading, disabled, error, credentials, credentialsError, copied, onCopy, onSubmit }) => (
   <article className={`login-role-card ${role}`}>
     <div className="login-role-heading">
       <span className="login-role-icon">{icon}</span>
@@ -143,10 +193,15 @@ const LoginCard: React.FC<LoginCardProps> = ({ role, title, description, feature
     </div>
     <ul className="login-role-features">{features.map(feature => <li key={feature}><Check size={14} aria-hidden="true" />{feature}</li>)}</ul>
     <div className="welcome-login-form">
-      <p className="welcome-demo-note">Prototype demo access · No email or password required</p>
+      <p className="welcome-demo-note">Public Hackathon Demo Account · Fictional sample data</p>
+      {credentials ? <div className="welcome-demo-credentials">
+        <div><span>Email</span><code>{credentials.email}</code><button type="button" onClick={() => onCopy('Email', credentials.email)} aria-label="Copy demo email"><Copy size={14} />{copied === `${role}-Email` ? 'Copied' : 'Copy email'}</button></div>
+        <div><span>Password</span><code>{credentials.password}</code><button type="button" onClick={() => onCopy('Password', credentials.password)} aria-label="Copy demo password"><Copy size={14} />{copied === `${role}-Password` ? 'Copied' : 'Copy password'}</button></div>
+        <button type="button" className="welcome-copy-all" onClick={() => onCopy('All', `Email: ${credentials.email}\nPassword: ${credentials.password}`)}><Copy size={14} />{copied === `${role}-All` ? 'Copied all credentials' : 'Copy all credentials'}</button>
+      </div> : <p className="welcome-login-error" role="status">{credentialsError || 'Loading public demo credentials…'}</p>}
       {error && <p className="welcome-login-error" role="alert">{error}</p>}
-      <button type="button" className="welcome-login-submit" disabled={disabled} onClick={onSubmit}>
-        {loading ? <><Loader2 className="spin" size={16} /> Opening demo workspace…</> : <>Continue as {role === 'manager' ? 'Manager' : 'Employee'} <ArrowRight size={16} /></>}
+      <button type="button" className="welcome-login-submit" disabled={disabled || !credentials} onClick={onSubmit}>
+        {loading ? <><Loader2 className="spin" size={16} /> Signing in…</> : <>Continue as {role === 'manager' ? 'Manager' : 'Employee'} <ArrowRight size={16} /></>}
       </button>
     </div>
   </article>

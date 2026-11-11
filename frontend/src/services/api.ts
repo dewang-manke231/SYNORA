@@ -121,6 +121,20 @@ export async function loginUser(payload: LoginPayload): Promise<AuthTokenRespons
   return data
 }
 
+export interface PublicDemoCredentials {
+  manager: { email: string; password: string }
+  employee: { email: string; password: string }
+}
+
+export async function fetchPublicDemoCredentials(): Promise<PublicDemoCredentials> {
+  const res = await window.fetch(`${API_BASE}/auth/demo-credentials`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Public demo credentials are unavailable.')
+  }
+  return res.json()
+}
+
 export async function demoLoginUser(role: 'manager' | 'employee'): Promise<AuthTokenResponse> {
   const res = await window.fetch(`${API_BASE}/auth/demo-login`, {
     method: 'POST',

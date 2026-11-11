@@ -20,6 +20,7 @@ from app.schemas.common import (
     EmployeeCreateRequest,
     UserLoginRequest,
     DemoLoginRequest,
+    PublicDemoCredentials,
     TokenResponse,
     UserResponse,
 )
@@ -27,6 +28,20 @@ from app.schemas.common import (
 router = APIRouter()
 
 EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+
+
+@router.get("/demo-credentials", response_model=PublicDemoCredentials)
+def get_public_demo_credentials() -> PublicDemoCredentials:
+    """Expose only the intentionally public credentials for the isolated demo."""
+    if not settings.DEMO_LOGIN_ENABLED or not settings.DEMO_SEED_ENABLED:
+        raise HTTPException(status_code=404, detail="Public demo login is disabled.")
+    if not all((settings.DEMO_MANAGER_EMAIL, settings.DEMO_MANAGER_PASSWORD,
+                settings.DEMO_EMPLOYEE_EMAIL, settings.DEMO_EMPLOYEE_PASSWORD)):
+        raise HTTPException(status_code=503, detail="Public demo credentials are not configured.")
+    return PublicDemoCredentials(
+        manager={"email": settings.DEMO_MANAGER_EMAIL, "password": settings.DEMO_MANAGER_PASSWORD},
+        employee={"email": settings.DEMO_EMPLOYEE_EMAIL, "password": settings.DEMO_EMPLOYEE_PASSWORD},
+    )
 
 
 @router.post("/employees", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -228,7 +243,7 @@ def login_user(
 @router.post("/demo-login", response_model=TokenResponse)
 def demo_login(payload: DemoLoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     """Issues a normal RBAC session for a role-specific demo identity."""
-    if not settings.DEMO_LOGIN_ENABLED:
+    if not settings.DEMO_LOGIN_ENABLED or settings.ENVIRONMENT.strip().lower() == "production":
         raise HTTPException(status_code=404, detail="Direct demo sign-in is disabled on this environment.")
 
     if settings.ENVIRONMENT.strip().lower() == "production":

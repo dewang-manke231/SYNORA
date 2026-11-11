@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     DEMO_LOGIN_ENABLED: Optional[bool] = None
     # Demo accounts are seeded only when explicitly enabled.
     DEMO_SEED_ENABLED: bool = False
+    # Public demo credentials are stored only in backend environment configuration.
+    DEMO_MANAGER_EMAIL: Optional[str] = None
+    DEMO_MANAGER_PASSWORD: Optional[str] = None
+    DEMO_EMPLOYEE_EMAIL: Optional[str] = None
+    DEMO_EMPLOYEE_PASSWORD: Optional[str] = None
 
     # Provider-independent AI configuration
     LLM_PROVIDER: str = "gemini"
@@ -63,6 +68,25 @@ class Settings(BaseSettings):
             self.DEMO_LOGIN_ENABLED = environment in {"development", "test", "prototype"}
         if environment == "production" and self.DEMO_LOGIN_ENABLED and not self.DEMO_SEED_ENABLED:
             raise ValueError("Production demo login requires DEMO_SEED_ENABLED=true for the isolated sample workspace.")
+
+        if self.DEMO_SEED_ENABLED:
+            required_demo_credentials = (
+                self.DEMO_MANAGER_EMAIL,
+                self.DEMO_MANAGER_PASSWORD,
+                self.DEMO_EMPLOYEE_EMAIL,
+                self.DEMO_EMPLOYEE_PASSWORD,
+            )
+            if any(not value or not value.strip() for value in required_demo_credentials):
+                raise ValueError("DEMO_SEED_ENABLED requires manager and employee demo email/password configuration.")
+            if self.DEMO_MANAGER_EMAIL.strip().lower() == self.DEMO_EMPLOYEE_EMAIL.strip().lower():
+                raise ValueError("Manager and employee demo accounts must use different email addresses.")
+            if len(self.DEMO_MANAGER_PASSWORD) < 12 or len(self.DEMO_EMPLOYEE_PASSWORD) < 12:
+                raise ValueError("Configured demo passwords must contain at least 12 characters.")
+            if environment == "production" and (
+                self.DEMO_MANAGER_EMAIL.strip().lower() != "manager@demo.synora.app"
+                or self.DEMO_EMPLOYEE_EMAIL.strip().lower() != "employee@demo.synora.app"
+            ):
+                raise ValueError("Production demo accounts must use the configured public demo email addresses.")
 
         # A missing or weak secret must never silently fall back to a known key.
         secret = self.JWT_SECRET
