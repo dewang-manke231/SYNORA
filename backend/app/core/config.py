@@ -22,8 +22,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "https://synora-b9co.vercel.app",
+        "https://synora-b9co-30c9kf3yk-dewang-manke231.vercel.app",
     ]
-
     # Database configuration
     DATABASE_URL: str = "sqlite:///./synora.db"
 
