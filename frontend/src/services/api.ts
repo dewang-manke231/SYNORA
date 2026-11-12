@@ -44,7 +44,9 @@ import type {
 
 const VITE_API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '')
 const API_BASE = VITE_API_URL ? `${VITE_API_URL}/api/v1` : '/api/v1'
+const API_CONFIGURATION_ERROR = 'The API server is not configured for this deployment. Set VITE_API_URL in Vercel to the public Synora backend URL, then redeploy.'
 const PROJECT_CACHE_TTL_MS = 20_000
+const AUTH_REQUEST_TIMEOUT_MS = 10_000
 let projectsCache: { token: string; expiresAt: number; rows: ProjectRecord[] } | null = null
 let projectsInFlight: { token: string; request: Promise<ProjectRecord[]> } | null = null
 
@@ -107,11 +109,25 @@ export async function authFetch(input: RequestInfo | URL, init: RequestInit = {}
 }
 
 export async function loginUser(payload: LoginPayload): Promise<AuthTokenResponse> {
-  const res = await window.fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
+  if (import.meta.env.PROD && !VITE_API_URL) throw new Error(API_CONFIGURATION_ERROR)
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await window.fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Sign-in timed out after 10 seconds. Please try again.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Authentication failed' }))
     throw new Error(err.detail || 'Login failed. Please check your email and password.')
@@ -127,7 +143,20 @@ export interface PublicDemoCredentials {
 }
 
 export async function fetchPublicDemoCredentials(): Promise<PublicDemoCredentials> {
-  const res = await window.fetch(`${API_BASE}/auth/demo-credentials`)
+  if (import.meta.env.PROD && !VITE_API_URL) throw new Error(API_CONFIGURATION_ERROR)
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await window.fetch(`${API_BASE}/auth/demo-credentials`, { signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Connecting to the sign-in service timed out. Please try again.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Public demo credentials are unavailable.')
